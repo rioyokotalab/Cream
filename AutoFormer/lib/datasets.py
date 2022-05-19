@@ -183,6 +183,8 @@ def build_dataset(is_train, args, folder_name=None):
         dataset = INatDataset(args.data_path, train=is_train, year=2019,
                               category=args.inat_category, transform=transform)
         nb_classes = dataset.nb_classes
+    else:
+        dataset = datasets.ImageFolder(args.data_path, transform=transform)
 
     return dataset, nb_classes
 

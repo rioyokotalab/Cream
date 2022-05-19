@@ -4,7 +4,9 @@ import numpy as np
 import time
 import torch
 import torch.backends.cudnn as cudnn
+import torch.distributed as dist
 from pathlib import Path
+import wandb
 
 from lib.datasets import build_dataset
 from lib import utils
@@ -21,7 +23,7 @@ def decode_cand_tuple(cand_tuple):
 
 class EvolutionSearcher(object):
 
-    def __init__(self, args, device, model, model_without_ddp, choices, val_loader, test_loader, output_dir):
+    def __init__(self, args, device, model, model_without_ddp, choices, val_loader, test_loader, output_dir, rank):
         self.device = device
         self.model = model
         self.model_without_ddp = model_without_ddp
@@ -42,11 +44,12 @@ class EvolutionSearcher(object):
         self.vis_dict = {}
         self.keep_top_k = {self.select_num: [], 50: []}
         self.epoch = 0
-        self.checkpoint_path = args.resume
+        self.checkpoint_path = args.load_cp
         self.candidates = []
         self.top_accuracies = []
         self.cand_params = []
         self.choices = choices
+        self.rank = rank
 
     def save_checkpoint(self):
 
@@ -91,16 +94,19 @@ class EvolutionSearcher(object):
         info['params'] =  n_parameters / 10.**6
 
         if info['params'] > self.parameters_limits:
-            print('parameters limit exceed')
+            if self.rank == 0:
+                print('parameters limit exceed')
             return False
 
         if info['params'] < self.min_parameters_limits:
-            print('under minimum parameters limit')
+            if self.rank == 0:
+                print('under minimum parameters limit')
             return False
 
-        print("rank:", utils.get_rank(), cand, info['params'])
-        eval_stats = evaluate(self.val_loader, self.model, self.device, amp=self.args.amp, mode='retrain', retrain_config=sampled_config)
-        test_stats = evaluate(self.test_loader, self.model, self.device, amp=self.args.amp, mode='retrain', retrain_config=sampled_config)
+        if self.rank == 0:
+            print("rank:", utils.get_rank(), cand, info['params'])
+        eval_stats = evaluate(self.val_loader, self.model, self.device, amp=self.args.amp, mode='retrain', retrain_config=sampled_config, rank=self.rank)
+        test_stats = evaluate(self.test_loader, self.model, self.device, amp=self.args.amp, mode='retrain', retrain_config=sampled_config, rank=self.rank)
 
         info['acc'] = eval_stats['acc1']
         info['test_acc'] = test_stats['acc1']
@@ -111,7 +117,8 @@ class EvolutionSearcher(object):
 
     def update_top_k(self, candidates, *, k, key, reverse=True):
         assert k in self.keep_top_k
-        print('select ......')
+        if self.rank == 0:
+            print('select ......')
         t = self.keep_top_k[k]
         t += candidates
         t.sort(key=key, reverse=reverse)
@@ -141,19 +148,23 @@ class EvolutionSearcher(object):
         return tuple(cand_tuple)
 
     def get_random(self, num):
-        print('random select ........')
+        if self.rank == 0:
+            print('random select ........')
         cand_iter = self.stack_random_cand(self.get_random_cand)
         while len(self.candidates) < num:
             cand = next(cand_iter)
             if not self.is_legal(cand):
                 continue
             self.candidates.append(cand)
-            print('random {}/{}'.format(len(self.candidates), num))
-        print('random_num = {}'.format(len(self.candidates)))
+            if self.rank == 0:
+                print('random {}/{}'.format(len(self.candidates), num))
+        if self.rank == 0:
+            print('random_num = {}'.format(len(self.candidates)))
 
     def get_mutation(self, k, mutation_num, m_prob, s_prob):
         assert k in self.keep_top_k
-        print('mutation ......')
+        if self.rank == 0:
+            print('mutation ......')
         res = []
         iter = 0
         max_iters = mutation_num * 10
@@ -204,14 +215,17 @@ class EvolutionSearcher(object):
             if not self.is_legal(cand):
                 continue
             res.append(cand)
-            print('mutation {}/{}'.format(len(res), mutation_num))
+            if self.rank == 0:
+                print('mutation {}/{}'.format(len(res), mutation_num))
 
-        print('mutation_num = {}'.format(len(res)))
+        if self.rank == 0:
+            print('mutation_num = {}'.format(len(res)))
         return res
 
     def get_crossover(self, k, crossover_num):
         assert k in self.keep_top_k
-        print('crossover ......')
+        if self.rank == 0:
+            print('crossover ......')
         res = []
         iter = 0
         max_iters = 10 * crossover_num
@@ -234,23 +248,27 @@ class EvolutionSearcher(object):
             if not self.is_legal(cand):
                 continue
             res.append(cand)
-            print('crossover {}/{}'.format(len(res), crossover_num))
+            if self.rank == 0:
+                print('crossover {}/{}'.format(len(res), crossover_num))
 
-        print('crossover_num = {}'.format(len(res)))
+        if self.rank == 0:
+            print('crossover_num = {}'.format(len(res)))
         return res
 
     def search(self):
-        print(
-            'population_num = {} select_num = {} mutation_num = {} crossover_num = {} random_num = {} max_epochs = {}'.format(
-                self.population_num, self.select_num, self.mutation_num, self.crossover_num,
-                self.population_num - self.mutation_num - self.crossover_num, self.max_epochs))
+        if self.rank == 0:
+            print(
+                'population_num = {} select_num = {} mutation_num = {} crossover_num = {} random_num = {} max_epochs = {}'.format(
+                    self.population_num, self.select_num, self.mutation_num, self.crossover_num,
+                    self.population_num - self.mutation_num - self.crossover_num, self.max_epochs))
 
         # self.load_checkpoint()
 
         self.get_random(self.population_num)
 
         while self.epoch < self.max_epochs:
-            print('epoch = {}'.format(self.epoch))
+            if self.rank == 0:
+                print('epoch = {}'.format(self.epoch))
 
             self.memory.append([])
             for cand in self.candidates:
@@ -261,12 +279,14 @@ class EvolutionSearcher(object):
             self.update_top_k(
                 self.candidates, k=50, key=lambda x: self.vis_dict[x]['acc'])
 
-            print('epoch = {} : top {} result'.format(
-                self.epoch, len(self.keep_top_k[50])))
+            if self.rank == 0:
+                print('epoch = {} : top {} result'.format(
+                    self.epoch, len(self.keep_top_k[50])))
             tmp_accuracy = []
             for i, cand in enumerate(self.keep_top_k[50]):
-                print('No.{} {} Top-1 val acc = {}, Top-1 test acc = {}, params = {}'.format(
-                    i + 1, cand, self.vis_dict[cand]['acc'], self.vis_dict[cand]['test_acc'], self.vis_dict[cand]['params']))
+                if self.rank == 0:
+                    print('No.{} {} Top-1 val acc = {}, Top-1 test acc = {}, params = {}'.format(
+                        i + 1, cand, self.vis_dict[cand]['acc'], self.vis_dict[cand]['test_acc'], self.vis_dict[cand]['params']))
                 tmp_accuracy.append(self.vis_dict[cand]['acc'])
             self.top_accuracies.append(tmp_accuracy)
 
@@ -280,7 +300,8 @@ class EvolutionSearcher(object):
 
             self.epoch += 1
 
-            self.save_checkpoint()
+            if self.rank == 0:
+                self.save_checkpoint()
 
 def get_args_parser():
     parser = argparse.ArgumentParser('DeiT training and evaluation script', add_help=False)
@@ -433,6 +454,7 @@ def get_args_parser():
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
+    parser.add_argument('--load_cp', default=None, type=str, help='load checkpoint of evolution search')
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
@@ -448,31 +470,73 @@ def get_args_parser():
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
+    parser.add_argument('--dist_backend', default='nccl', type=str, help='distributed backend')
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--no-amp', action='store_false', dest='amp')
     parser.set_defaults(amp=True)
+
+    # wandb parameters
+    parser.add_argument('--log_wandb', action='store_true')
+    parser.add_argument('--project_name', default='AutoFormer', type=str)
+    parser.add_argument('--experiment', default='', type=str)
+    parser.add_argument('--group', default='evolution', type=str)
 
     return parser
 
 def main(args):
 
+    args.distributed = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1')) > 1
+    args.local_rank = 0
+    args.world_size = 1
+    args.rank = 0  # global rank
+    if args.distributed:
+        # initialize torch.distributed using MPI
+        master_addr = os.getenv("MASTER_ADDR", default="localhost")
+        master_port = os.getenv('MASTER_PORT', default='8888')
+        method = "tcp://{}:{}".format(master_addr, master_port)
+        rank = int(os.getenv('OMPI_COMM_WORLD_RANK', '0'))  # global rank
+        world_size = int(os.getenv('OMPI_COMM_WORLD_SIZE', '1'))
+
+        ngpus_per_node = torch.cuda.device_count()
+        node = rank // ngpus_per_node
+        args.local_rank = rank % ngpus_per_node
+        torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(backend=args.dist_backend, init_method=method, world_size=world_size,
+                                             rank=rank)
+        args.rank = rank
+        args.world_size = world_size
+        print('Training in distributed mode with multiple processes, 1 GPU per process. Process %d:%d, total %d.'
+              % (args.local_rank, node, args.world_size))
+    else:
+        print('Training with a single process on 1 GPUs.')
+    assert args.rank >= 0
+
     update_config_from_file(args.cfg)
-    utils.init_distributed_mode(args)
 
-    device = torch.device(args.device)
+    device = torch.device(args.local_rank)
 
-    print(args)
+    if args.rank == 0:
+        print(args)
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
-    # save config for later experiments
-    with open(os.path.join(args.output_dir, "config.yaml"), 'w') as f:
-        f.write(args_text)
-    # fix the seed for reproducibility
 
+    output_dir = Path(f'{args.output_dir}/{args.experiment}')
+    if not output_dir.exists() and args.rank == 0:
+        output_dir.mkdir(parents=True)
+    args.output_dir = output_dir
+    # save config for later experiments
+    if args.rank == 0:
+        with open(os.path.join(args.output_dir, "config.yaml"), 'w') as f:
+            f.write(args_text)
+
+    # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(args.seed)
     cudnn.benchmark = True
+
+    if args.log_wandb and args.rank == 0:
+        wandb.init(project=args.project_name, entity='yokota-vit', name=args.experiment, group=args.group, config=args)
 
     args.prefetcher = not args.no_prefetcher
 
@@ -480,10 +544,10 @@ def main(args):
     dataset_test, _ = build_dataset(is_train=False, args=args, folder_name="val")
 
     if args.distributed:
-        num_tasks = utils.get_world_size()
-        global_rank = utils.get_rank()
+        num_tasks = world_size
+        global_rank = dist.get_rank()
         if args.dist_eval:
-            if len(dataset_val) % num_tasks != 0:
+            if len(dataset_val) % num_tasks != 0 and args.rank == 0:
                 print(
                     'Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
                     'This will slightly alter validation results as extra duplicate entries are added to achieve '
@@ -511,8 +575,9 @@ def main(args):
         pin_memory=args.pin_mem, drop_last=False
     )
 
-    print(f"Creating SuperVisionTransformer")
-    print(cfg)
+    if args.rank == 0:
+        print(f"Creating SuperVisionTransformer")
+        print(cfg)
     model = Vision_TransformerSuper(img_size=args.input_size,
                                     patch_size=args.patch_size,
                                     embed_dim=cfg.SUPERNET.EMBED_DIM, depth=cfg.SUPERNET.DEPTH,
@@ -528,19 +593,21 @@ def main(args):
     model.to(device)
     model_without_ddp = model
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank])
         model_without_ddp = model.module
 
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('number of params:', n_parameters)
+    if args.rank == 0:
+        print('number of params:', n_parameters)
     if args.resume:
         if args.resume.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
-        print("resume from checkpoint: {}".format(args.resume))
+        if args.rank == 0:
+            print("resume from checkpoint: {}".format(args.resume))
         model_without_ddp.load_state_dict(checkpoint['model'])
 
     choices = {'num_heads': cfg.SEARCH_SPACE.NUM_HEADS, 'mlp_ratio': cfg.SEARCH_SPACE.MLP_RATIO,
@@ -548,12 +615,15 @@ def main(args):
 
 
     t = time.time()
-    searcher = EvolutionSearcher(args, device, model, model_without_ddp, choices, data_loader_val, data_loader_test, args.output_dir)
+    searcher = EvolutionSearcher(args, device, model, model_without_ddp, choices, data_loader_val, data_loader_test, args.output_dir, args.rank)
 
+    if args.load_cp:
+        searcher.load_checkpoint()
     searcher.search()
 
-    print('total searching time = {:.2f} hours'.format(
-        (time.time() - t) / 3600))
+    if args.rank == 0:
+        print('total searching time = {:.2f} hours'.format(
+            (time.time() - t) / 3600))
 
 
 if __name__ == '__main__':

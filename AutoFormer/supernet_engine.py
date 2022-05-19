@@ -28,23 +28,25 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None,
                     amp: bool = True, teacher_model: torch.nn.Module = None,
-                    teach_loss: torch.nn.Module = None, choices=None, mode='super', retrain_config=None):
+                    teach_loss: torch.nn.Module = None, choices=None, mode='super', retrain_config=None, rank=0):
     model.train()
     criterion.train()
 
     # set random seed
     random.seed(epoch)
 
-    metric_logger = utils.MetricLogger(delimiter="  ")
+    metric_logger = utils.MetricLogger(delimiter="  ", rank=rank)
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 10
     if mode == 'retrain':
         config = retrain_config
         model_module = unwrap_model(model)
-        print(config)
+        if rank == 0:
+            print(config)
         model_module.set_sample_config(config=config)
-        print(model_module.get_sampled_params_numel(config))
+        if rank == 0:
+            print(model_module.get_sampled_params_numel(config))
 
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
         samples = samples.to(device, non_blocking=True)
@@ -108,14 +110,15 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    if rank == 0:
+        print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 @torch.no_grad()
-def evaluate(data_loader, model, device, amp=True, choices=None, mode='super', retrain_config=None):
+def evaluate(data_loader, model, device, amp=True, choices=None, mode='super', retrain_config=None, rank=0):
     criterion = torch.nn.CrossEntropyLoss()
 
-    metric_logger = utils.MetricLogger(delimiter="  ")
+    metric_logger = utils.MetricLogger(delimiter="  ", rank=rank)
     header = 'Test:'
 
     # switch to evaluation mode
@@ -129,10 +132,11 @@ def evaluate(data_loader, model, device, amp=True, choices=None, mode='super', r
         model_module = unwrap_model(model)
         model_module.set_sample_config(config=config)
 
-
-    print("sampled model config: {}".format(config))
+    if rank == 0:
+        print("sampled model config: {}".format(config))
     parameters = model_module.get_sampled_params_numel(config)
-    print("sampled model parameters: {}".format(parameters))
+    if rank == 0:
+        print("sampled model parameters: {}".format(parameters))
 
     for images, target in metric_logger.log_every(data_loader, 10, header):
         images = images.to(device, non_blocking=True)
@@ -154,7 +158,8 @@ def evaluate(data_loader, model, device, amp=True, choices=None, mode='super', r
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+    if rank == 0:
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
