@@ -311,8 +311,8 @@ def get_args_parser():
     parser.add_argument('--max-epochs', type=int, default=20)
     parser.add_argument('--select-num', type=int, default=10)
     parser.add_argument('--population-num', type=int, default=50)
-    parser.add_argument('--m_prob', type=float, default=0.2)
-    parser.add_argument('--s_prob', type=float, default=0.4)
+    parser.add_argument('--m-prob', type=float, default=0.2)
+    parser.add_argument('--s-prob', type=float, default=0.4)
     parser.add_argument('--crossover-num', type=int, default=25)
     parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--mutation-num', type=int, default=25)
@@ -325,20 +325,20 @@ def get_args_parser():
     # custom parameters
     parser.add_argument('--platform', default='pai', type=str, choices=['itp', 'pai', 'aml'],
                         help='Name of model to train')
-    parser.add_argument('--teacher_model', default='', type=str,
+    parser.add_argument('--teacher-model', default='', type=str,
                         help='Name of teacher model to train')
-    parser.add_argument('--relative_position', action='store_true')
-    parser.add_argument('--max_relative_position', type=int, default=14, help='max distance in relative position embedding')
+    parser.add_argument('--relative-position', action='store_true')
+    parser.add_argument('--max-relative-position', type=int, default=14, help='max distance in relative position embedding')
     parser.add_argument('--scale', action='store_true')
     parser.add_argument('--gp', action='store_true')
-    parser.add_argument('--change_qkv', action='store_true')
+    parser.add_argument('--change-qkv', action='store_true')
 
     # Model parameters
     parser.add_argument('--model', default='', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input-size', default=224, type=int)
-    parser.add_argument('--patch_size', default=16, type=int)
+    parser.add_argument('--patch-size', default=16, type=int)
 
     parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
                         help='Dropout rate (default: 0.)')
@@ -354,9 +354,9 @@ def get_args_parser():
     parser.add_argument('--model-ema-force-cpu', action='store_true', default=False, help='')
 
     # custom model argument
-    parser.add_argument('--rpe_type', type=str, default='bias', choices=['bias', 'direct'])
-    parser.add_argument('--post_norm', action='store_true')
-    parser.add_argument('--no_abs_pos', action='store_true')
+    parser.add_argument('--rpe-type', type=str, default='bias', choices=['bias', 'direct'])
+    parser.add_argument('--post-norm', action='store_true')
+    parser.add_argument('--no-abs-pos', action='store_true')
 
     # Optimizer parameters
     parser.add_argument('--opt', default='adamw', type=str, metavar='OPTIMIZER',
@@ -448,17 +448,17 @@ def get_args_parser():
                         type=str, help='semantic granularity')
     parser.add_argument('--no-prefetcher', action='store_true', default=False,
                         help='disable fast prefetcher')
-    parser.add_argument('--output_dir', default='',
+    parser.add_argument('--output-dir', default='',
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
-    parser.add_argument('--load_cp', default=None, type=str, help='load checkpoint of evolution search')
-    parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
+    parser.add_argument('--load-cp', default=None, type=str, help='load checkpoint of evolution search')
+    parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
-    parser.add_argument('--num_workers', default=10, type=int)
+    parser.add_argument('--num-workers', default=10, type=int)
     parser.add_argument('--dist-eval', action='store_true', default=False, help='Enabling distributed evaluation')
     parser.add_argument('--pin-mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
@@ -467,17 +467,17 @@ def get_args_parser():
     parser.set_defaults(pin_mem=True)
 
     # distributed training parameters
-    parser.add_argument('--world_size', default=1, type=int,
+    parser.add_argument('--world-size', default=1, type=int,
                         help='number of distributed processes')
-    parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
-    parser.add_argument('--dist_backend', default='nccl', type=str, help='distributed backend')
+    parser.add_argument('--dist-url', default='env://', help='url used to set up distributed training')
+    parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
     parser.add_argument('--amp', action='store_true')
     parser.add_argument('--no-amp', action='store_false', dest='amp')
     parser.set_defaults(amp=True)
 
     # wandb parameters
-    parser.add_argument('--log_wandb', action='store_true')
-    parser.add_argument('--project_name', default='AutoFormer', type=str)
+    parser.add_argument('--log-wandb', action='store_true')
+    parser.add_argument('--project-name', default='AutoFormer', type=str)
     parser.add_argument('--experiment', default='', type=str)
     parser.add_argument('--group', default='evolution', type=str)
 

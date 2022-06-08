@@ -21,14 +21,14 @@ export NPERNODE=4
 mpirun -npernode $NPERNODE -np $NGPUS \
 python supernet_train.py \
     --data-path /groups/gcd50691/datasets/ImageNet --gp \
-    --change_qkv --mode super --dist-eval --relative_position \
+    --change-qkv --mode super --dist-eval --relative-position \
     --cfg ./experiments/supernet/supernet-S.yaml --epochs 500 --warmup-epochs 20 \
-    --output_dir /groups/gcc50533/acc12016yi/AutoFormer/output --batch-size 128 \
+    --output-dir /groups/gcc50533/acc12016yi/AutoFormer/output --batch-size 128 \
     --lr 5e-4 --scaled-lr \
-    --hold_epoch 50 --ckp_hist 10 \
-    --eval_fixed_model \
-    --log_wandb --experiment supernet_train_small_imnet1k_from_imnet21k \
+    --hold-epoch 50 --ckp-hist 10 \
+    --eval-fixed-model \
+    --log-wandb --experiment supernet_train_small_imnet1k_from_imnet21k \
     --resume /groups/gcc50533/acc12016yi/AutoFormer/output/pretrain_autoformer_small_imnet21k/model_best.pth.tar \
-    --no_resume_opt --start_epoch 0 --resume_mode load_timm_pretrain
+    --no-resume-opt --start-epoch 0 --resume-mode load_timm_pretrain
     # --resume /groups/gcc50533/acc12016yi/AutoFormer/output/supernet_train_tiny_imnet1k_from_supernet_imnet21k_lr5e-4/last.pth \
-    # --resume_mode resume_train 
+    # --resume-mode resume_train 

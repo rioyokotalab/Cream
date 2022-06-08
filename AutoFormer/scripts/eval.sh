@@ -21,9 +21,9 @@ export NPERNODE=4
 mpirun -npernode $NPERNODE -np $NGPUS \
 python supernet_train.py \
     --data-path /groups/gcd50691/datasets/ImageNet --gp \
-    --change_qkv --relative_position --dist-eval --eval \
+    --change-qkv --relative-position --dist-eval --eval \
     --cfg ./experiments/subnet/AutoFormer-5.8M-imnet21k.yaml --mode retrain \
-    --output_dir /groups/gcc50533/acc12016yi/AutoFormer/output --batch-size 32 \
+    --output-dir /groups/gcc50533/acc12016yi/AutoFormer/output --batch-size 32 \
     --resume /groups/gcc50533/acc12016yi/AutoFormer/output/supernet_train_tiny_imnet1k_from_imnet21k_qkvbias/last.pth \
-    --no_resume_opt --start_epoch 0 --resume_mode resume_train \
-    --log_wandb --experiment eval_tiny_imnet1k_from_imnet21k
+    --no-resume-opt --start-epoch 0 --resume-mode resume_train \
+    --log-wandb --experiment eval_tiny_imnet1k_from_imnet21k

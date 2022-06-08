@@ -21,10 +21,10 @@ export NPERNODE=4
 mpirun -npernode $NPERNODE -np $NGPUS \
 python evolution.py \
     --data-path /groups/gcc50533/imnet/ILSVRC2012 --gp \
-    --change_qkv --relative_position --dist-eval \
+    --change-qkv --relative-position --dist-eval \
     --cfg ./experiments/supernet/supernet-S.yaml \
     --resume /groups/gcc50533/acc12016yi/AutoFormer/output/supernet_train_small_imnet1k_from_supernet_imnet21k/last.pth \
     --min-param-limits 20 --param-limits 23 --data-set EVO_IMNET \
-    --output_dir /groups/gcc50533/acc12016yi/AutoFormer/output \
-    --log_wandb --experiment evolution_small_imnet1k_from_imnet21k_20to23
-#     --load_cp /groups/gcc50533/acc12016yi/AutoFormer/output/evolution_tiny_imnet1k_bs4096_3to6/checkpoint-16.pth.tar
+    --output-dir /groups/gcc50533/acc12016yi/AutoFormer/output \
+    --log-wandb --experiment evolution_small_imnet1k_from_imnet21k_20to23
+#     --load-cp /groups/gcc50533/acc12016yi/AutoFormer/output/evolution_tiny_imnet1k_bs4096_3to6/checkpoint-16.pth.tar
