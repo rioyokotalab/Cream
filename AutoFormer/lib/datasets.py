@@ -185,6 +185,7 @@ def build_dataset(is_train, args, folder_name=None):
         nb_classes = dataset.nb_classes
     else:
         dataset = datasets.ImageFolder(args.data_path, transform=transform)
+        nb_classes = args.nb_classes
 
     return dataset, nb_classes
 
